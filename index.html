@@ -358,72 +358,79 @@ a,button,[role="button"],input,select{transition:color var(--transition),backgro
 </main>
 
 <script>
-function exportReportPDF(){
-  if(!calcResult){ alert('Сначала выполните расчёт.'); return; }
-  const r = calcResult;
-  const indMap = {agro:'Агросектор / АПК',oilgas:'Нефтегаз наземный',offshore:'Нефтегаз морской / шельф',mining:'Горное оборудование',chem:'Нефтехимия / реакторы',wind:'Ветроэнергетика (ВЭУ)',general:'Общепром / конвейеры'};
-  const loadMap = {uniform:'Равномерная',mild:'Лёгкие удары',moderate:'Умеренные удары',heavy:'Тяжёлые удары'};
-  const tempMap = {standard:'-20...+60C',cold:'-45...+40C',hot:'+20...+100C',arctic:'-60...+20C'};
-  const Ku = (KU_MATRIX[r.ind] && KU_MATRIX[r.ind][r.lt]) ? KU_MATRIX[r.ind][r.lt] : 1.5;
-  const T2d = r.t2 * Ku;
-  const Ks = r.vm ? (r.vm.t2_max / T2d).toFixed(2) : '--';
-  const ksClass = parseFloat(Ks) >= 1.5 ? 'ks-good' : parseFloat(Ks) >= 1.2 ? 'ks-warn' : 'ks-bad';
-  const now = new Date().toLocaleDateString('ru-RU');
+function exportReportPDF() {
+  if (!lastResults) {
+    alert('Сначала выполните расчёт (нажмите кнопку «Подобрать редуктор»)');
+    return;
+  }
+  const r = lastResults;
+  const safeNum = (v, d=1) => (v !== undefined && v !== null && !isNaN(v)) ? Number(v).toLocaleString('ru-RU', {maximumFractionDigits: d}) : '—';
+  
+  const printWin = window.open('', '_blank');
+  printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Отчёт ВМ-подбор</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:20mm;font-size:11pt;color:#1a1a2e}
+    h1{color:#1a1a2e;font-size:16pt;border-bottom:3px solid #e63946;padding-bottom:8px}
+    h2{color:#1a1a2e;font-size:13pt;margin-top:20px;border-left:4px solid #e63946;padding-left:10px}
+    table{width:100%;border-collapse:collapse;margin:10px 0}
+    td{padding:6px 10px;border:1px solid #ddd;font-size:10pt}
+    td:first-child{background:#f5f5f5;font-weight:bold;width:55%}
+    .header{background:#1a1a2e;color:white;padding:15px 20px;margin:-20mm -20mm 20px -20mm;display:flex;align-items:center;gap:20px}
+    .logo-text{font-size:22pt;font-weight:bold;color:white;letter-spacing:2px}
+    .logo-sub{font-size:9pt;color:#aaa}
+    .footer{margin-top:30px;font-size:9pt;color:#888;border-top:1px solid #ddd;padding-top:10px;text-align:center}
+    @media print{body{margin:10mm}}
+  </style></head><body>
+  <div class="header">
+    <div>
+      <div class="logo-text">РУСМАШ</div>
+      <div class="logo-sub">ООО «РУСМАШ» | ИНН 7706418586 | rusmashgroup.ru</div>
+    </div>
+  </div>
+  <h1>Отчёт подбора редукторного модуля серии ВМ</h1>
+  <p style="color:#666;font-size:10pt">Сформирован: ${new Date().toLocaleString('ru-RU')} | Предварительный инженерный расчёт — не является КД</p>
 
-  const html = '<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Отчёт ' + (r.vm ? r.vm.name : '') + '</title>'
-    + '<style>'
-    + '*{box-sizing:border-box;margin:0;padding:0}'
-    + 'body{font-family:Arial,sans-serif;font-size:10pt;color:#222;background:#fff;padding:15mm}'
-    + '.logo-bar{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #0D2B6E;padding-bottom:6pt;margin-bottom:12pt}'
-    + '.brand{font-size:16pt;font-weight:700;color:#0D2B6E;letter-spacing:1px}'
-    + '.sub{font-size:8pt;color:#666}'
-    + '.dt{font-size:8pt;color:#666;text-align:right}'
-    + 'h1{font-size:13pt;font-weight:700;color:#0D2B6E;margin-bottom:8pt;text-align:center}'
-    + 'h2{font-size:10pt;font-weight:700;color:#0D2B6E;border-left:3px solid #C8102E;padding-left:6pt;margin:10pt 0 5pt}'
-    + 'table{width:100%;border-collapse:collapse;margin-bottom:8pt}'
-    + 'th{background:#0D2B6E;color:#fff;font-size:9pt;padding:4pt 6pt;text-align:left}'
-    + 'td{border:1px solid #ddd;font-size:9pt;padding:4pt 6pt}'
-    + 'tr:nth-child(even) td{background:#f5f5f5}'
-    + '.ks-good{color:#2a7a22;font-weight:700}'
-    + '.ks-warn{color:#b07a00;font-weight:700}'
-    + '.ks-bad{color:#a12c2c;font-weight:700}'
-    + '.verdict{background:#e8f4e8;border:1px solid #2a7a22;border-radius:4pt;padding:8pt;margin-bottom:10pt;font-size:9pt}'
-    + '.footer{margin-top:16pt;border-top:1px solid #ccc;padding-top:6pt;font-size:8pt;color:#888;text-align:center}'
-    + '@media print{button{display:none}}'
-    + '</style></head><body>'
-    + '<div class="logo-bar"><div><div class="brand">ExCentro</div><div class="sub">ЗАО «Технология Маркет» / ООО «РУСМАШ»</div></div>'
-    + '<div class="dt">Дата: ' + now + '<br>pokerface-hub.github.io/vm-selector</div></div>'
-    + '<h1>Предварительный подбор редуктора серии ВМ</h1>'
-    + '<div class="verdict">' + (r.vm ? ('Рекомендован: <strong>' + r.vm.name + '</strong> | i = ' + r.i + ' | T2_nom = ' + r.vm.t2_nom + ' кНм | Ks = <span class="' + ksClass + '">' + Ks + '</span>') : 'Подходящий типоразмер не найден — требуется индивидуальный расчёт') + '</div>'
-    + '<h2>Исходные данные</h2>'
-    + '<table><tr><th>Параметр</th><th>Значение</th></tr>'
-    + '<tr><td>Отрасль</td><td>' + (indMap[r.ind] || r.ind) + '</td></tr>'
-    + '<tr><td>Крутящий момент T2</td><td>' + r.t2 + ' кНм</td></tr>'
-    + '<tr><td>Частота вращения n1</td><td>' + r.n1 + ' об/мин</td></tr>'
-    + '<tr><td>Требуемый ресурс</td><td>' + r.hours.toLocaleString('ru-RU') + ' ч</td></tr>'
-    + '<tr><td>Тип нагрузки</td><td>' + (loadMap[r.lt] || r.lt) + '</td></tr>'
-    + '<tr><td>Температурный диапазон</td><td>' + (tempMap[r.temp] || r.temp) + '</td></tr>'
-    + '</table>'
-    + '<h2>Результаты подбора</h2>'
-    + '<table><tr><th>Параметр</th><th>Значение</th></tr>'
-    + '<tr><td>Типоразмер</td><td><strong>' + (r.vm ? r.vm.name : '--') + '</strong></td></tr>'
-    + '<tr><td>Передаточное число i</td><td>' + r.i + '</td></tr>'
-    + '<tr><td>КПД модуля</td><td>0,93...0,99</td></tr>'
-    + '<tr><td>Коэффициент нагрузки Ku</td><td>' + Ku.toFixed(1) + '</td></tr>'
-    + '<tr><td>Расчётный момент T2_design</td><td>' + T2d.toFixed(1) + ' кНм</td></tr>'
-    + '<tr><td>Коэффициент запаса Ks</td><td class="' + ksClass + '">' + Ks + '</td></tr>'
-    + '<tr><td>Диаметр корпуса</td><td>' + (r.vm ? r.vm.d + ' мм' : '--') + '</td></tr>'
-    + '<tr><td>Масса</td><td>' + (r.vm ? r.vm.mass + ' кг' : '--') + '</td></tr>'
-    + '<tr><td>Рекомендуемая смазка</td><td>' + (r.lube || '--') + '</td></tr>'
-    + '</table>'
-    + '<div class="footer">Документ сформирован автоматически. Не является конструкторской документацией. Для официального расчёта обратитесь в ЗАО «Технология Маркет».</div>'
-    + '</body></html>';
+  <h2>Шаг 1 — Входные параметры</h2>
+  <table>
+    <tr><td>Отрасль</td><td>${r.industry||'—'}</td></tr>
+    <tr><td>Крутящий момент T₂</td><td>${safeNum(r.t2)} кНм</td></tr>
+    <tr><td>Частота вращения n₁</td><td>${safeNum(r.n1,0)} об/мин</td></tr>
+    <tr><td>Передаточное число i</td><td>${safeNum(r.ratio,0)}</td></tr>
+    <tr><td>Тип нагрузки</td><td>${r.loadType||'—'}</td></tr>
+    <tr><td>Коэффициент ударности Ku</td><td>${safeNum(r.ku,2)}</td></tr>
+    <tr><td>Требуемый ресурс</td><td>${safeNum(r.life,0)} ч</td></tr>
+  </table>
 
-  const w = window.open('', '_blank', 'width=900,height=700');
-  if(!w){ alert('Разрешите всплывающие окна для этого сайта и повторите экспорт.'); return; }
-  w.document.write(html);
-  w.document.close();
-  setTimeout(function(){ w.focus(); w.print(); }, 600);
+  <h2>Шаг 2 — Подбор редуктора</h2>
+  <table>
+    <tr><td>Типоразмер</td><td>${r.model||'—'}</td></tr>
+    <tr><td>Расчётный момент T_расч</td><td>${safeNum(r.tDesign)} кНм</td></tr>
+    <tr><td>Коэффициент запаса Ks</td><td>${safeNum(r.ks,2)}</td></tr>
+    <tr><td>Выходная частота n₂</td><td>${safeNum(r.n2,1)} об/мин</td></tr>
+    <tr><td>Масса</td><td>${safeNum(r.mass,0)} кг</td></tr>
+    <tr><td>Класс защиты</td><td>${r.ip||'—'}</td></tr>
+    <tr><td>Смазка</td><td>${r.lube||'—'}</td></tr>
+    <tr><td>Ресурс L10h</td><td>${safeNum(r.l10h,0)} ч</td></tr>
+  </table>
+
+  <h2>Шаг 3 — Муфта</h2>
+  <table>
+    <tr><td>Номинальный момент T_ном</td><td>${safeNum(r.tNom)} Н·м</td></tr>
+    <tr><td>Пиковый момент T_пик</td><td>${safeNum(r.tPeak)} Н·м</td></tr>
+    <tr><td>Расчётный момент муфты</td><td>${safeNum(r.tCoupling)} Н·м</td></tr>
+    <tr><td>Рекомендованный тип</td><td>${r.couplingType||'—'}</td></tr>
+    <tr><td>Радиальная несоосность</td><td>${r.radialMis||'—'}</td></tr>
+    <tr><td>Угловая несоосность</td><td>${r.angularMis||'—'}</td></tr>
+  </table>
+
+  <div class="footer">
+    ООО «РУСМАШ» | 119607, г. Москва, ул. Удальцова, д. 50, кв. 73 | +7 (926) 235-35-39 | info@rusmashgroup.ru<br>
+    Инструмент подбора: https://pokerface-hub.github.io/vm-selector/
+  </div>
+  </body></html>`);
+  printWin.document.close();
+  setTimeout(() => printWin.print(), 500);
 }
 // expose globally
 window.exportReportPDF = exportReportPDF;
